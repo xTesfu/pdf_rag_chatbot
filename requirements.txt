@@ -10,3 +10,6 @@ streamlit
 torchvision
 ruff
 langchain-text-splitters
+fastapi
+uvicorn
+python-multipart
