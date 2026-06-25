@@ -1,4 +1,3 @@
-import os
 import tempfile
 
 from app.chunker import chunk_text
@@ -17,21 +16,21 @@ from app.vector_store import (
 
 
 def process_pdf(pdf_path, pdf_bytes):
-
     doc_id = get_doc_id(pdf_bytes)
 
-    print(f"\nProcessing document: {doc_id}")
+    print(f"\n📄 Processing document: {doc_id}")
 
-    # Try loading from disk
     index = load_index(doc_id)
     chunks = load_chunks(doc_id)
 
+    # -------------------------
+    # CACHE MISS → BUILD
+    # -------------------------
     if index is None or chunks is None:
+        print("🔨 Building new index...")
 
-        print("Building new index...")
-
-        text = load_pdf(pdf_path)
-        chunks = chunk_text(text)
+        pages = load_pdf(pdf_path)
+        chunks = chunk_text(pages)
 
         vectors = build_vector(chunks)
         index = build_index(vectors)
@@ -40,18 +39,13 @@ def process_pdf(pdf_path, pdf_bytes):
         save_chunks(chunks, doc_id)
 
     else:
-        print("Loaded cached index.")
+        print("⚡ Loaded cached index.")
 
-    return doc_id, index, chunks
+    return doc_id
 
 
 def main(pdf_paths):
-
-    print("Starting multi-PDF RAG system...\n")
-
-    # store processed docs (optional for CLI mode)
-    documents = {}
-
+    print("🚀 Starting multi-PDF RAG system...\n")
     for path in pdf_paths:
 
         with open(path, "rb") as f:
@@ -61,26 +55,30 @@ def main(pdf_paths):
             tmp.write(pdf_bytes)
             tmp_path = tmp.name
 
-        doc_id, index, chunks = process_pdf(tmp_path, pdf_bytes)
+        process_pdf(tmp_path, pdf_bytes)
 
-        documents[doc_id] = {
-            "index": index,
-            "chunks": chunks
-        }
-
+        import os
         os.remove(tmp_path)
 
     print("\n✅ System ready! Ask questions.\n")
 
+    # -------------------------
+    # CHAT LOOP
+    # -------------------------
     while True:
-
         query = input("Ask: ")
 
         if query.lower() in ["exit", "quit"]:
             break
 
-        context = retrieve(query, k=3)
-        context_text = "\n\n".join(context)
+        results = retrieve(query, k=3)
+
+        context_text = "\n\n".join(
+            [
+                f"[{r['document']} | page {r['page']}]\n{r['text']}"
+                for r in results
+            ]
+        )
 
         answer = ask_llm(context_text, query)
 
@@ -93,11 +91,10 @@ def main(pdf_paths):
 # RUN
 # =========================
 if __name__ == "__main__":
-
     pdf_files = [
         "data/file1.pdf",
         "data/file2.pdf",
-        "data/file3.pdf"
+        "data/file3.pdf",
     ]
 
     main(pdf_files)

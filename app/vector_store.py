@@ -63,8 +63,12 @@ def load_chunks(doc_id):
 def clear_document(doc_id):
     path = get_doc_path(doc_id)
 
+    if not path.exists():
+        return
+    
     for file in path.iterdir():
-        file.unlink()
+        if file.is_file():
+            file.unlink()
 
     path.rmdir()
 
