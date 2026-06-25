@@ -2,11 +2,7 @@ import os
 import tempfile
 from typing import Annotated
 
-from fastapi import (
-    FastAPI,
-    File,
-    UploadFile,
-)
+from fastapi import FastAPI, File, UploadFile
 from pydantic import BaseModel
 
 from app.chunker import chunk_text
@@ -26,12 +22,17 @@ from app.vector_store import (
 
 app = FastAPI(
     title="PDF RAG API",
-    version="1.0.0"
+    version="1.1.0"
 )
+
 
 class Question(BaseModel):
     question: str
 
+
+# -------------------------
+# UPLOAD PDFs
+# -------------------------
 @app.post("/upload")
 async def upload_pdfs(
     files: Annotated[list[UploadFile], File()]
@@ -48,17 +49,13 @@ async def upload_pdfs(
 
         if index is None or chunks is None:
 
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=".pdf"
-            ) as tmp:
-
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 tmp.write(pdf_bytes)
                 pdf_path = tmp.name
 
             try:
-                text = load_pdf(pdf_path)
-                chunks = chunk_text(text)
+                pages = load_pdf(pdf_path)
+                chunks = chunk_text(pages)
 
                 vectors = build_vector(chunks)
                 index = build_index(vectors)
@@ -82,12 +79,21 @@ async def upload_pdfs(
         "count": len(uploaded_documents),
     }
 
+
+# -------------------------
+# ASK QUESTION
+# -------------------------
 @app.post("/ask")
 def ask(question: Question):
 
-    context = retrieve(question.question)
+    results = retrieve(question.question)
 
-    context_text = "\n\n".join(context)
+    context_text = "\n\n".join(
+        [
+            f"[{r['document']} | page {r['page']}]\n{r['text']}"
+            for r in results
+        ]
+    )
 
     answer = ask_llm(
         context_text,
@@ -97,9 +103,13 @@ def ask(question: Question):
     return {
         "question": question.question,
         "answer": answer,
-        "sources_found": len(context)
+        "sources_found": len(results)
     }
 
+
+# -------------------------
+# LIST DOCUMENTS
+# -------------------------
 @app.get("/documents")
 def documents():
 
