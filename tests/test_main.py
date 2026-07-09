@@ -1,9 +1,8 @@
-from io import BytesIO
 import builtins
-import pytest
 import tempfile
 
 import main
+
 
 class FakeFile:
     def __init__(self):
@@ -44,8 +43,14 @@ def test_process_pdf_builds_index(monkeypatch):
 
     monkeypatch.setattr("main.build_index", lambda vectors: object())
 
-    monkeypatch.setattr("main.save_index", lambda idx, doc_id: calls.setdefault("saved_index", True))
-    monkeypatch.setattr("main.save_chunks", lambda chunks, doc_id: calls.setdefault("saved_chunks", True))
+    monkeypatch.setattr(
+        "main.save_index", 
+        lambda idx, doc_id: calls.setdefault("saved_index", True)
+    )
+    monkeypatch.setattr(
+        "main.save_chunks", 
+        lambda chunks, doc_id: calls.setdefault("saved_chunks", True)
+    )
 
     result = main.process_pdf("fake.pdf", b"pdf-bytes")
 
@@ -59,9 +64,10 @@ def test_process_pdf_cache_hit(monkeypatch):
     monkeypatch.setattr("main.load_index", lambda doc_id: object())
     monkeypatch.setattr("main.load_chunks", lambda doc_id: [{"cached": True}])
 
-    called = {"built": False}
-
-    monkeypatch.setattr("main.load_pdf", lambda p: (_ for _ in ()).throw(Exception("should not be called")))
+    monkeypatch.setattr(
+        "main.load_pdf", 
+        lambda p: (_ for _ in ()).throw(Exception("should not be called"))
+    )
     monkeypatch.setattr("main.chunk_text", lambda x: None)
     monkeypatch.setattr("main.build_vector", lambda x: None)
     monkeypatch.setattr("main.build_index", lambda x: None)
@@ -102,6 +108,31 @@ def test_main_processes_pdfs(monkeypatch):
     main.main(["file1.pdf"])
 
 def test_context_formatting(monkeypatch):
+    monkeypatch.setattr(main, "process_pdf", lambda p, b: "doc1")
+
+    def fake_open(*args, **kwargs):
+        return FakeFile()
+
+    monkeypatch.setattr(builtins, "open", fake_open)
+
+    class FakeTemp:
+        name = "tmp.pdf"
+
+        def write(self, x):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
+
+    monkeypatch.setattr(tempfile, "NamedTemporaryFile", lambda *a, **k: FakeTemp())
+
+    import os
+
+    monkeypatch.setattr(os, "remove", lambda x: None)
+
     # -------------------------
     # Fake retrieval result
     # -------------------------

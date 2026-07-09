@@ -76,16 +76,16 @@ if uploaded_files:
                 tmp_file.write(pdf_bytes)
                 pdf_path = tmp_file.name
 
-            # Extract text and chunks
-            pages = load_pdf(pdf_path)
-            chunks = chunk_text(pages, document_name=uploaded_file.name)
-
             # Try loading cached version
             index = load_index(doc_id)
             saved_chunks = load_chunks(doc_id)
 
             # Build if cache doesn't exist
             if index is None or saved_chunks is None:
+
+                # Extract text and chunks only when there's no cache to use
+                pages = load_pdf(pdf_path)
+                chunks = chunk_text(pages, document_name=uploaded_file.name)
 
                 vectors = build_vector(chunks)
                 index = build_index(vectors)
